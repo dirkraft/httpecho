@@ -1,3 +1,7 @@
+apply plugin: 'application'
+
+mainClassName = 'com.github.dirkraft.httpecho.HttpEcho'
+
 dependencies {
 
     compile 'io.vertx:vertx-core:2.1.5'
@@ -8,4 +12,4 @@ dependencies {
 
 // Heroku
 task stage
-stage.dependsOn assemble
+stage.dependsOn installApp
