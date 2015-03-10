@@ -3,6 +3,7 @@
 /httpecho.ipr
 /httpecho.iws
 httpecho*.iml
+out/
 
 # Gradle
 /.gradle/
