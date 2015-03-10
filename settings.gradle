@@ -1,0 +1,3 @@
+rootProject.name = 'httpecho'
+include 'httpecho-core'
+

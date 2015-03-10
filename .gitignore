@@ -1,0 +1,10 @@
+# IDEA
+/.idea/
+/httpecho.ipr
+/httpecho.iws
+httpecho*.iml
+
+# Gradle
+/.gradle/
+/build/
+
