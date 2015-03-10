@@ -5,3 +5,7 @@ dependencies {
     compile 'org.slf4j:slf4j-simple:1.7.10'
 
 }
+
+// Heroku
+task stage
+stage.dependsOn assemble
