@@ -10,15 +10,15 @@ import java.util.Objects;
 
 public class TextHtml {
 
-    public static final String TEMPLATE = Annoyed.shh(() ->
+    public static final String TEMPLATE = Ø.call(() ->
             Resources.toString(Resources.getResource("template.html"), Charsets.UTF_8));
     public static final String TOKEN_TBODY = "TOKEN_TBODY";
 
-    public static String serialize(Map<String, Object> m) {
+    public static String serialize(Summary s) {
         StringWriter html = new StringWriter();
         PrintWriter p = new PrintWriter(html);
 
-        for (Map.Entry<String, Object> e : m.entrySet()) {
+        for (Map.Entry<String, Object> e : s.asMap().entrySet()) {
             final String value;
             if (e.getValue() instanceof Iterable) {
                 StringWriter inner = new StringWriter();

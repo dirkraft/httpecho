@@ -5,6 +5,7 @@ mainClassName = 'com.github.dirkraft.httpecho.HttpEcho'
 dependencies {
 
     compile 'io.vertx:vertx-core:2.1.5'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.5.1'
     compile 'org.apache.httpcomponents:httpcore:4.4'
     compile 'com.google.guava:guava:18.0'
     compile 'org.slf4j:slf4j-simple:1.7.10'

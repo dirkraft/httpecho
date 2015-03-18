@@ -3,9 +3,9 @@ package com.github.dirkraft.httpecho;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
-public class Annoyed {
+public class Ø {
 
-    public static <T> Supplier<T> sh(Callable<T> c) {
+    public static <T> Supplier<T> supplier(Callable<T> c) {
         return () -> {
             try {
                 return c.call();
@@ -17,7 +17,7 @@ public class Annoyed {
         };
     }
 
-    public static <V> V shh(Callable<V> c) {
+    public static <V> V call(Callable<V> c) {
         try {
             return c.call();
         } catch (RuntimeException e) {

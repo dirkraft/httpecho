@@ -1,9 +1,5 @@
 package com.github.dirkraft.httpecho;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.google.common.base.Predicate;
-import com.google.common.collect.Iterables;
 import org.apache.http.Header;
 import org.apache.http.HeaderElement;
 import org.apache.http.message.BasicHeader;
@@ -14,13 +10,15 @@ import org.vertx.java.core.Vertx;
 import org.vertx.java.core.http.HttpHeaders;
 import org.vertx.java.core.http.HttpServer;
 import org.vertx.java.core.http.HttpServerRequest;
+import org.vertx.java.core.http.HttpServerResponse;
 import org.vertx.java.core.impl.DefaultVertx;
 
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -30,8 +28,6 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
 
     public static final String HEADER_ALL_HEADERS = "echoAllHeaders";
     public static final String HEADER_FORMAT = "echoFormat";
-
-    static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     /**
      * Heroku does not seem to expose any way to disable forwarding headers. So we'll just have to filter them out
@@ -48,11 +44,12 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
             "Total-Route-Time"
     ).collect(Collectors.toSet());
 
-    static final Map<String, Function<Map<String, Object>, String>> SERIALIZERS = Collections.unmodifiableMap(Stream.of(
-            new Entry("text/plain", Object::toString),
-            new Entry("text/html", TextHtml::serialize),
-            new Entry("application/json", (o) -> Annoyed.sh(() -> MAPPER.writeValueAsString(o)).get())
-    ).collect(Collectors.toMap((s) -> s.name, (s) -> s.serializer)));
+    static final Map<String, Serializer> SERIALIZERS = Collections.unmodifiableMap(Stream.of(
+            new Serializer("text/plain", Object::toString),
+            new Serializer("text/html", TextHtml::serialize),
+            new Serializer("text/xml", TextXml::serialize),
+            new Serializer("application/json", TextJson::serialize)
+    ).collect(Collectors.toMap((s) -> s.type, Function.identity())));
 
     final int port;
 
@@ -78,43 +75,33 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
 
     @Override
     public void handle(HttpServerRequest event) {
+        HttpServerResponse response = event.response();
         try {
 
-            Map<String, Object> summary = summarize(event);
-            Function<Map<String, Object>, String> serializer = serializer(event);
-            String serialized = serializer.apply(summary);
-            event.response().end(serialized);
+            Summary summary = summarize(event);
+            Serializer serializer = serializer(event);
+            String serialized = serializer.fn.apply(summary);
+            response.putHeader(HttpHeaders.CONTENT_TYPE, serializer.type);
+            response.end(serialized);
 
         } finally {
-            event.response().close();
+            response.close();
         }
     }
 
-    Map<String, Object> summarize(HttpServerRequest event) {
+    Summary summarize(HttpServerRequest event) {
         boolean allHeaders = "true".equalsIgnoreCase(event.params().get(HEADER_ALL_HEADERS));
-        final Predicate<Map.Entry<String, String>> headersPredicate;
+        final Predicate<Entry<String, String>> headersPredicate;
         if (allHeaders) {
             headersPredicate = (e) -> true;
         } else {
             headersPredicate = (e) -> !HEROKU_HEADERS.contains(e.getKey());
         }
 
-        Map<String, Object> summary = new LinkedHashMap<>();
-
-        summary.put("version", event.version());
-        summary.put("method", event.method());
-        summary.put("uri", event.uri());
-        summary.put("absoluteURI", event.absoluteURI());
-        summary.put("path", event.path());
-        summary.put("query", event.query());
-        summary.put("params", event.params());
-        summary.put("headers", Iterables.filter(event.headers().entries(), headersPredicate));
-        summary.put("remoteAddress", event.remoteAddress());
-
-        return summary;
+        return new Summary(event, headersPredicate);
     }
 
-    Function<Map<String, Object>, String> serializer(HttpServerRequest event) {
+    Serializer serializer(HttpServerRequest event) {
         String rawFormat = event.params().get(HEADER_FORMAT);
         if (null == rawFormat) {
             rawFormat = event.headers().get(HttpHeaders.ACCEPT);
@@ -126,7 +113,7 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
             for (int i = 0; i < acceptHeader.getElements().length; i++) {
                 HeaderElement headerElement = acceptHeader.getElements()[i];
                 String accept = headerElement.getName();
-                Function<Map<String, Object>, String> serializer = SERIALIZERS.get(accept);
+                Serializer serializer = SERIALIZERS.get(accept);
                 if (serializer != null) {
                     return serializer;
                 }
@@ -136,13 +123,13 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
         return SERIALIZERS.get("text/plain");
     }
 
-    static class Entry {
-        final String name;
-        final Function<Map<String, Object>, String> serializer;
+    static class Serializer {
+        final String type;
+        final Function<Summary, String> fn;
 
-        public Entry(String name, Function<Map<String, Object>, String> serializer) {
-            this.name = name;
-            this.serializer = serializer;
+        public Serializer(String type, Function<Summary, String> fn) {
+            this.type = type;
+            this.fn = fn;
         }
     }
 
