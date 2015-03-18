@@ -19,7 +19,6 @@ import org.vertx.java.core.impl.DefaultVertx;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -28,6 +27,9 @@ import java.util.stream.Stream;
 public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpEcho.class);
+
+    public static final String HEADER_ALL_HEADERS = "echoAllHeaders";
+    public static final String HEADER_FORMAT = "echoFormat";
 
     static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
@@ -79,7 +81,8 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
         try {
 
             Map<String, Object> summary = summarize(event);
-            String serialized = serialize(event, summary);
+            Function<Map<String, Object>, String> serializer = serializer(event);
+            String serialized = serializer.apply(summary);
             event.response().end(serialized);
 
         } finally {
@@ -88,7 +91,7 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
     }
 
     Map<String, Object> summarize(HttpServerRequest event) {
-        boolean allHeaders = "true".equalsIgnoreCase(event.params().get("allHeaders"));
+        boolean allHeaders = "true".equalsIgnoreCase(event.params().get(HEADER_ALL_HEADERS));
         final Predicate<Map.Entry<String, String>> headersPredicate;
         if (allHeaders) {
             headersPredicate = (e) -> true;
@@ -111,22 +114,26 @@ public class HttpEcho implements Runnable, Handler<HttpServerRequest> {
         return summary;
     }
 
-    String serialize(HttpServerRequest event, Map<String, Object> summary) {
-        Optional<String> acceptOpt = Optional.ofNullable(event.headers().get(HttpHeaders.ACCEPT));
-        Function<Map<String, Object>, String> serializer = null;
-        if (acceptOpt.isPresent()) {
-            Header acceptHeader = new BasicHeader(HttpHeaders.ACCEPT.toString(), acceptOpt.get());
-            for (int i = 0; i < acceptHeader.getElements().length && serializer == null; i++) {
-                HeaderElement headerElement = acceptHeader.getElements()[i];
-                String accept = headerElement.getName();
-                serializer = SERIALIZERS.get(accept);
-            }
-        }
-        if (serializer == null) {
-            serializer = SERIALIZERS.get("text/plain");
+    Function<Map<String, Object>, String> serializer(HttpServerRequest event) {
+        String rawFormat = event.params().get(HEADER_FORMAT);
+        if (null == rawFormat) {
+            rawFormat = event.headers().get(HttpHeaders.ACCEPT);
         }
 
-        return serializer.apply(summary);
+        if (null != rawFormat) {
+            // for value parsing
+            Header acceptHeader = new BasicHeader(HttpHeaders.ACCEPT.toString(), rawFormat);
+            for (int i = 0; i < acceptHeader.getElements().length; i++) {
+                HeaderElement headerElement = acceptHeader.getElements()[i];
+                String accept = headerElement.getName();
+                Function<Map<String, Object>, String> serializer = SERIALIZERS.get(accept);
+                if (serializer != null) {
+                    return serializer;
+                }
+            }
+        }
+
+        return SERIALIZERS.get("text/plain");
     }
 
     static class Entry {
